@@ -41,6 +41,19 @@ class HeartbeatReceiver : BroadcastReceiver() {
             }
         }
 
+        /**
+         * Whether the next pulse should use setAlarmClock (Max) scheduling.
+         *
+         * Note this is the scheduling actually in use right now, which is not
+         * the same as the user's selected mode: a Max user with respectDnd
+         * enabled runs standard scheduling for as long as DND is active.
+         */
+        fun isUsingMaxScheduling(context: Context): Boolean {
+            val prefsManager = PrefsManager(context)
+            return prefsManager.protectionLevel == PrefsManager.LEVEL_MAX &&
+                    !(prefsManager.respectDnd && isDndActive(context))
+        }
+
         fun scheduleNextPulse(context: Context) {
             val prefsManager = PrefsManager(context)
             val intervalMs = prefsManager.pulseIntervalMinutes * 60 * 1000L
@@ -50,8 +63,7 @@ class HeartbeatReceiver : BroadcastReceiver() {
                 action = ACTION_HEARTBEAT
             }
 
-            val useMaxScheduling = prefsManager.protectionLevel == PrefsManager.LEVEL_MAX &&
-                    !(prefsManager.respectDnd && isDndActive(context))
+            val useMaxScheduling = isUsingMaxScheduling(context)
 
             // Always cancel BOTH alarm types before scheduling.
             // This prevents a stale setAlarmClock from firing after we switch
