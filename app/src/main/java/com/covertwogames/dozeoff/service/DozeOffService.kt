@@ -15,7 +15,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.covertwogames.dozeoff.MainActivity
@@ -41,7 +40,6 @@ class DozeOffService : Service() {
         private const val WATCHDOG_STANDARD_MULTIPLIER = 4
     }
 
-    private var wakeLock: PowerManager.WakeLock? = null
     private var notificationUpdateTimer: Timer? = null
     private var dndReceiver: DndChangeReceiver? = null
     private var lastWatchdogRearmAt = 0L
@@ -60,18 +58,10 @@ class DozeOffService : Service() {
         val notification = buildNotification()
         startForeground(NOTIFICATION_ID, notification)
 
-        // Only acquire if we are not already holding one. onStartCommand can be
-        // called repeatedly (toggle, boot, START_STICKY restart) and overwriting
-        // a held wakelock would leak it permanently.
-        if (wakeLock?.isHeld != true) {
-            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-            wakeLock = powerManager.newWakeLock(
-                PowerManager.PARTIAL_WAKE_LOCK,
-                "DozeOff::ServiceWakeLock"
-            ).apply {
-                acquire()
-            }
-        }
+        // No service-level wakelock is held. The foreground service is what
+        // keeps the process alive; a wakelock would only keep the CPU from
+        // suspending, which Doze ignores anyway and which Play's excessive
+        // partial wake lock metric penalises.
 
         // Reset pulse counter on each fresh start (toggle on or reboot)
         PrefsManager(this).totalPulses = 0
@@ -121,11 +111,6 @@ class DozeOffService : Service() {
             try { unregisterReceiver(it) } catch (e: Exception) { /* already unregistered */ }
         }
         dndReceiver = null
-
-        wakeLock?.let {
-            if (it.isHeld) it.release()
-        }
-        wakeLock = null
 
         notificationUpdateTimer?.cancel()
         notificationUpdateTimer = null
@@ -293,7 +278,9 @@ class DozeOffService : Service() {
     private fun startNotificationUpdates() {
         notificationUpdateTimer?.cancel()
         notificationUpdateTimer = Timer().apply {
-            scheduleAtFixedRate(object : TimerTask() {
+            // Fixed delay rather than fixed rate: after the CPU suspends we do
+            // not want a burst of catch-up executions on wake.
+            schedule(object : TimerTask() {
                 override fun run() {
                     updateNotification()
                     try {

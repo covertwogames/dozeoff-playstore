@@ -70,5 +70,23 @@ class SettingsActivity : AppCompatActivity() {
                     android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.covertwogames.dozeoff")))
             }
         }
+
+        // Network diagnostic (temporary, remove when done measuring)
+        binding.textNetLog.text = prefsManager.getNetLog()
+
+        binding.btnCopyNetLog.setOnClickListener {
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            clipboard.setPrimaryClip(
+                android.content.ClipData.newPlainText("DozeOff Net Log", prefsManager.getNetLog())
+            )
+            android.widget.Toast.makeText(
+                this, "Network log copied", android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
+
+        binding.btnClearNetLog.setOnClickListener {
+            prefsManager.clearNetLog()
+            binding.textNetLog.text = prefsManager.getNetLog()
+        }
     }
 }

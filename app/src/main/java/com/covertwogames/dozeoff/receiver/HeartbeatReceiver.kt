@@ -16,12 +16,14 @@ import android.os.SystemClock
 import android.util.Log
 import com.covertwogames.dozeoff.MainActivity
 import com.covertwogames.dozeoff.util.PrefsManager
+import java.util.concurrent.atomic.AtomicBoolean
 
 class HeartbeatReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "HeartbeatReceiver"
-        private const val WAKELOCK_TIMEOUT = 5000L // 5 seconds
+        private const val WAKELOCK_TIMEOUT = 10000L // upper bound; released as soon as the window closes
+        private const val NETWORK_WINDOW_MS = 3000L
         const val ACTION_HEARTBEAT = "com.covertwogames.dozeoff.HEARTBEAT"
         private const val REQUEST_CODE_HEARTBEAT = 0
         private const val REQUEST_CODE_ALARM_CLOCK = 1
@@ -156,12 +158,34 @@ class HeartbeatReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action != ACTION_HEARTBEAT) return
 
+        // Tell Android we have work outstanding beyond the return of this
+        // method. Without this the process can be torn down as soon as
+        // onReceive returns, which would cut the network window short.
+        val pendingResult = goAsync()
+
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         val wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "DozeOff::HeartbeatWakeLock"
         )
         wakeLock.acquire(WAKELOCK_TIMEOUT)
+
+        // Runs exactly once, whichever path we finish on.
+        val finished = AtomicBoolean(false)
+        val complete = {
+            if (finished.compareAndSet(false, true)) {
+                try {
+                    if (wakeLock.isHeld) wakeLock.release()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Wakelock release failed: ${e.message}")
+                }
+                try {
+                    pendingResult.finish()
+                } catch (e: Exception) {
+                    Log.e(TAG, "PendingResult finish failed: ${e.message}")
+                }
+            }
+        }
 
         try {
             Log.d(TAG, "Heartbeat pulse fired")
@@ -170,20 +194,22 @@ class HeartbeatReceiver : BroadcastReceiver() {
             prefsManager.lastPulseTime = System.currentTimeMillis()
             prefsManager.incrementPulseCount()
 
-            // Request network to formally wake the network stack
-            performNetworkRequest(context)
-
-            // Schedule the next pulse
+            // Schedule the next pulse first, so the chain survives even if the
+            // network request below throws.
             scheduleNextPulse(context)
 
-        } finally {
-            if (wakeLock.isHeld) {
-                wakeLock.release()
-            }
+            // Request network to formally wake the network stack. Releases the
+            // wakelock and finishes the broadcast when the window closes.
+            performNetworkRequest(context, complete)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Pulse failed: ${e.message}")
+            complete()
         }
     }
 
-    private fun performNetworkRequest(context: Context) {
+    private fun performNetworkRequest(context: Context, onComplete: () -> Unit) {
+        val prefsManager = PrefsManager(context)
         try {
             val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
                     as ConnectivityManager
@@ -192,28 +218,38 @@ class HeartbeatReceiver : BroadcastReceiver() {
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 .build()
 
+            val requestedAt = SystemClock.elapsedRealtime()
+            val recorded = AtomicBoolean(false)
+
             val callback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: android.net.Network) {
-                    Log.d(TAG, "Network available during pulse")
+                    if (recorded.compareAndSet(false, true)) {
+                        val elapsed = SystemClock.elapsedRealtime() - requestedAt
+                        prefsManager.recordNetAvailable(elapsed)
+                        Log.d(TAG, "Network available after ${elapsed}ms")
+                    }
                 }
             }
 
-            // Request the network — this formally tells Android we need connectivity,
-            // which forces the network stack awake and lets pending FCM messages
-            // and sync operations piggyback on the connection
+            prefsManager.recordNetAttempt()
             connectivityManager.requestNetwork(networkRequest, callback)
 
-            // Release after 3 seconds — enough for pending messages to flush
             Handler(Looper.getMainLooper()).postDelayed({
                 try {
                     connectivityManager.unregisterNetworkCallback(callback)
                 } catch (e: Exception) {
                     // Already unregistered
                 }
-            }, 3000)
+                if (!recorded.get()) {
+                    prefsManager.addNetLogEntry("no onAvailable within window")
+                }
+                onComplete()
+            }, NETWORK_WINDOW_MS)
 
         } catch (e: Exception) {
             Log.d(TAG, "Network request skipped: ${e.message}")
+            prefsManager.addNetLogEntry("request threw: ${e.message}")
+            onComplete()
         }
     }
 }
