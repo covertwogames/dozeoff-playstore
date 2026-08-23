@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Outer dashed ring - approximated with small dots arranged in a circle -->
+    <!-- 16 dots at radius 10.5 from center (12,12) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="
+            M22.5,12 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0
+            M21.44,15.88 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0
+            M18.88,19.04 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0
+            M15.28,20.84 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0
+            M11.2,20.84 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0
+            M7.52,19.04 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0
+            M5.04,15.88 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0
+            M3.9,12 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0
+            M5.04,8.12 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0
+            M7.52,4.96 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0
+            M11.2,3.16 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0
+            M15.28,3.16 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0
+            M18.88,4.96 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0
+            M21.44,8.12 a0.8,0.8 0 1,1 -1.6,0 a0.8,0.8 0 1,1 1.6,0" />
+
+    <!-- Inner solid ring with gap at top -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.8"
+        android:pathData="M14.8,5.2 A7,7 0 1,1 9.2,5.2" />
+
+    <!-- Center dot -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M15,12 a3,3 0 1,1 -6,0 a3,3 0 1,1 6,0" />
+
+</vector>

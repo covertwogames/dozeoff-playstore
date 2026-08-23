@@ -1,0 +1,31 @@
+# ---- Signing keys: NEVER commit these ----
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# ---- Local config ----
+local.properties
+
+# ---- Build output ----
+build/
+app/build/
+app/release/
+app/debug/
+/captures
+.externalNativeBuild
+.cxx
+
+# ---- Gradle ----
+.gradle/
+
+# ---- Android Studio / IntelliJ ----
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# ---- OS junk ----
+.DS_Store
+Thumbs.db
