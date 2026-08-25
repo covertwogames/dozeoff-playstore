@@ -19,7 +19,6 @@ class PrefsManager(context: Context) {
         private const val KEY_PROTECTION_LEVEL = "protection_level"
         private const val KEY_MAX_CONFIRMED = "max_confirmed"
         private const val KEY_MAX_VERIFIED = "max_verified"
-        private const val KEY_RESPECT_DND = "respect_dnd"
         private const val KEY_DASHBOARD_OPEN_COUNT = "dashboard_open_count"
         private const val KEY_LAST_REVIEW_REQUEST_OPEN = "last_review_request_open"
 
@@ -75,9 +74,11 @@ class PrefsManager(context: Context) {
         get() = prefs.getBoolean(KEY_MAX_VERIFIED, false)
         set(value) = prefs.edit().putBoolean(KEY_MAX_VERIFIED, value).apply()
 
-    var respectDnd: Boolean
-        get() = prefs.getBoolean(KEY_RESPECT_DND, true)
-        set(value) = prefs.edit().putBoolean(KEY_RESPECT_DND, value).apply()
+    // Always on. The Settings toggle was removed because turning this off lets
+    // Max mode's alarm clock switch off the user's Do Not Disturb / Bedtime
+    // mode, which reads as a bug rather than a setting.
+    val respectDnd: Boolean
+        get() = true
 
     var dashboardOpenCount: Int
         get() = prefs.getInt(KEY_DASHBOARD_OPEN_COUNT, 0)

@@ -240,9 +240,9 @@ class DozeOffService : Service() {
 
         val titleText = when {
             level == PrefsManager.LEVEL_MAX && prefsManager.respectDnd &&
-                    HeartbeatReceiver.isDndActive(this) -> "DozeOff: Protection Active"
+                    HeartbeatReceiver.isDndActive(this) -> "DozeOff: Minimum Protection"
             level == PrefsManager.LEVEL_MAX -> "DozeOff: Max Protection"
-            else -> "DozeOff: Protection Active"
+            else -> "DozeOff: Minimum Protection"
         }
 
         val statusText = if (lastPulse > 0) {

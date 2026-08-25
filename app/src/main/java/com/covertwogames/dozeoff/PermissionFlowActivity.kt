@@ -343,7 +343,7 @@ class PermissionFlowActivity : AppCompatActivity() {
     }
 
     private fun activateAndFinish() {
-        prefsManager.protectionLevel = PrefsManager.LEVEL_ON
+        prefsManager.protectionLevel = PrefsManager.LEVEL_MAX
         prefsManager.isEnabled = true
         prefsManager.isOnboardingComplete = true
 

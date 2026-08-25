@@ -134,7 +134,7 @@
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
                         android:paddingHorizontal="20dp"
-                        android:text="On"
+                        android:text="Min"
                         android:textColor="@color/toggle_button_text"
                         android:textSize="13sp"
                         app:backgroundTint="@color/toggle_button_bg"

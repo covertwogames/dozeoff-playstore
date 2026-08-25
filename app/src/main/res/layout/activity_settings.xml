@@ -48,7 +48,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="Note: In standard mode, Android may delay pulses up to ~9 minutes regardless of this setting. Max mode will use these intervals exactly."
+                android:text="Note: In Minimum mode, Android limits pulses to roughly one every 15 minutes once your device is in deep sleep, regardless of this setting. Max mode uses these intervals exactly."
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp"
                 android:fontStyle="italic" />
@@ -87,52 +87,6 @@
                     android:textSize="15sp" />
 
             </RadioGroup>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginVertical="24dp"
-                android:background="@color/divider" />
-
-            <!-- DND Respect -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="16dp"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Respect Do Not Disturb / Bedtime Mode"
-                        android:textColor="@color/text_primary"
-                        android:textSize="15sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="Automatically reduces to standard protection during Do Not Disturb or Bedtime Mode. Max protection resumes when DND ends."
-                        android:textColor="@color/text_secondary"
-                        android:textSize="13sp" />
-
-                </LinearLayout>
-
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/switchRespectDnd"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checked="true" />
-
-            </LinearLayout>
 
             <View
                 android:layout_width="match_parent"
@@ -208,7 +162,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:text="What's the difference between Standard &amp; Max protection?"
+                android:text="What's the difference between Minimum &amp; Max protection?"
                 android:textColor="@color/text_primary"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -217,7 +171,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Standard Protection (On)"
+                android:text="Minimum Protection (Min)"
                 android:textColor="@color/text_primary"
                 android:textSize="14sp"
                 android:textStyle="bold" />
@@ -227,7 +181,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:lineSpacingExtra="3dp"
-                android:text="DozeOff sends a regular background pulse (frequency set above) to wake your device briefly and allow delayed notifications to come through. This works within Android's normal battery rules, so some pulses may be slightly delayed by the system during deep sleep. Most notification delays will be significantly reduced.\n\nYou won't see any extra icons or indicators from this mode."
+                android:text="DozeOff sends a regular background pulse (frequency set above) that works within Android's normal battery rules. Android limits these pulses to roughly one every 15 minutes once your device is in deep sleep, and they don't bring the device fully out of it.\n\nThis means Minimum uses very little battery and shows no icons, but other apps' notifications may still be delayed while your phone is asleep.\n\nMinimum is the conservative choice. If timely notifications are the reason you installed DozeOff, use Max."
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
 
@@ -245,7 +199,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:lineSpacingExtra="3dp"
-                android:text="Max mode uses a stronger method that Android cannot delay or skip. Every pulse fires exactly on schedule and briefly puts the entire system into an alert state, flushing all pending notifications, messages, and syncs.\n\nThis is significantly more effective than standard protection, but there are two things to be aware of:\n\n1) A small alarm clock icon may appear in your status bar on some devices. This is not something DozeOff can disable.\n\n2) Max mode can interfere with Do Not Disturb and Bedtime modes, when enabled. By default, DozeOff automatically drops to standard protection while Do Not Disturb or Bedtime Mode is active and resumes Max when it ends. You can change this with the toggle above.\n\nBattery impact for both modes is minimal — typically 1-2% per day."
+                android:text="Max uses a stronger method that Android cannot delay or skip. Each pulse briefly brings your whole device out of deep sleep, which is when Android delivers all pending notifications, messages and syncs from every app. This is the mode that actually addresses delayed notifications.\n\nTwo things to be aware of:\n\n1) A small alarm clock icon may appear in your status bar. Whether it appears depends on your device, and many phones never show it.\n\n2) Max can interfere with Do Not Disturb and Bedtime modes. DozeOff pauses Max while those are active and resumes automatically when they end.\n\nBattery impact for both modes is minimal — typically 1-2% per day."
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
 

@@ -78,6 +78,13 @@ class MainActivity : AppCompatActivity() {
             prefsManager.lastReviewRequestOpen = openCount
             requestInAppReview()
         }
+
+        // First run after onboarding: onboarding now activates Max directly, so
+        // the user never taps the Max button. Show the explainer once here.
+        if (prefsManager.protectionLevel == PrefsManager.LEVEL_MAX &&
+            !prefsManager.isMaxConfirmed) {
+            showMaxConfirmDialog()
+        }
     }
 
     override fun onResume() {
@@ -208,24 +215,25 @@ class MainActivity : AppCompatActivity() {
 
     private fun showMaxConfirmDialog() {
         com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-            .setTitle("Enable Maximum Protection?")
+            .setTitle("Maximum Protection Enabled")
             .setMessage(
-                "Max mode uses a more powerful method to keep your phone " +
-                "awake and flush delayed notifications. It's significantly " +
-                "more effective than standard mode.\n\n" +
-                "However, a small alarm clock icon may appear in your " +
-                "status bar while Max mode is active. This is normal and " +
-                "varies by device."
+                "Max is the mode that does the real work. It briefly wakes " +
+                "your device on a schedule so that pending notifications " +
+                "from all your apps arrive on time, instead of piling up " +
+                "until you next unlock.\n\n" +
+                "On some devices a small alarm clock icon appears in the " +
+                "status bar while Max is on. This isn't something DozeOff " +
+                "can disable if it shows on your device.\n\n" +
+                "You can switch to Minimum protection any time from the " +
+                "home screen."
             )
-            .setPositiveButton("Enable Max") { _, _ ->
+            .setPositiveButton("OK") { _, _ ->
                 prefsManager.isMaxConfirmed = true
                 activateMaxIfPermitted()
             }
-            .setNegativeButton("Cancel") { _, _ ->
-                revertToggle()
-            }
             .setOnCancelListener {
-                revertToggle()
+                prefsManager.isMaxConfirmed = true
+                activateMaxIfPermitted()
             }
             .create()
             .show()
@@ -332,7 +340,7 @@ class MainActivity : AppCompatActivity() {
 
             if (isDndLimited) {
                 binding.statusIcon.setColorFilter(getColor(R.color.success))
-                binding.statusText.text = "Max Protection Limited"
+                binding.statusText.text = "Max Protection Paused"
                 binding.statusText.setTextColor(getColor(R.color.warning))
                 binding.btnDndInfo.visibility = View.VISIBLE
             } else {
@@ -340,7 +348,7 @@ class MainActivity : AppCompatActivity() {
                 val modeText = if (level == PrefsManager.LEVEL_MAX) {
                     if (prefsManager.isMaxVerified) "Max Protection Active ✓" else "Max Protection Active (unverified)"
                 } else {
-                    "Protection Active"
+                    "Minimum Protection Active"
                 }
                 binding.statusText.text = modeText
                 binding.statusText.setTextColor(getColor(R.color.success))
@@ -513,15 +521,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun showDndInfoDialog() {
         com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-            .setTitle("Max Protection Limited")
+            .setTitle("Max Protection Paused")
             .setMessage(
-                "DozeOff temporarily suspends Max mode when Do Not Disturb " +
-                "or Bedtime Mode is enabled on your phone, as Max mode can " +
-                "interfere with those settings.\n\n" +
-                "Standard protection remains active during this time. Max " +
-                "mode will automatically resume when Do Not Disturb is " +
-                "turned off.\n\n" +
-                "You can change this behavior in DozeOff's Settings."
+                "DozeOff pauses Max protection while Do Not Disturb or " +
+                "Bedtime Mode is active, because Max can interfere with " +
+                "those settings.\n\n" +
+                "Max resumes automatically when Do Not Disturb ends."
             )
             .setPositiveButton("OK", null)
             .create()
