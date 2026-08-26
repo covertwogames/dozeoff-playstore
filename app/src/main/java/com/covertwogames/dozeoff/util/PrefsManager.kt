@@ -22,11 +22,6 @@ class PrefsManager(context: Context) {
         private const val KEY_DASHBOARD_OPEN_COUNT = "dashboard_open_count"
         private const val KEY_LAST_REVIEW_REQUEST_OPEN = "last_review_request_open"
 
-        // --- Network diagnostic (temporary, remove when done measuring) ---
-        private const val KEY_NET_ATTEMPTS = "net_attempts"
-        private const val KEY_NET_AVAILABLE = "net_available"
-        private const val KEY_NET_LOG = "net_log"
-
         const val DEFAULT_INTERVAL = 10 // minutes
 
         const val LEVEL_OFF = 0
@@ -90,52 +85,5 @@ class PrefsManager(context: Context) {
 
     fun incrementPulseCount() {
         totalPulses = totalPulses + 1
-    }
-
-    // ---------------------------------------------------------------------
-    // Network diagnostic (temporary, remove when done measuring)
-    //
-    // Measures whether requestNetwork() actually produces an onAvailable
-    // callback within the pulse window, or whether the call is dead weight.
-    // ---------------------------------------------------------------------
-    var netAttempts: Int
-        get() = prefs.getInt(KEY_NET_ATTEMPTS, 0)
-        set(value) = prefs.edit().putInt(KEY_NET_ATTEMPTS, value).apply()
-
-    var netAvailable: Int
-        get() = prefs.getInt(KEY_NET_AVAILABLE, 0)
-        set(value) = prefs.edit().putInt(KEY_NET_AVAILABLE, value).apply()
-
-    fun recordNetAttempt() {
-        netAttempts = netAttempts + 1
-    }
-
-    fun recordNetAvailable(millisToAvailable: Long) {
-        netAvailable = netAvailable + 1
-        addNetLogEntry("available after ${millisToAvailable}ms")
-    }
-
-    fun addNetLogEntry(entry: String) {
-        val timeStr = java.text.SimpleDateFormat("h:mm:ss a", java.util.Locale.getDefault())
-            .format(java.util.Date())
-        val existing = prefs.getString(KEY_NET_LOG, "") ?: ""
-        val lines = existing.split("\n").filter { it.isNotBlank() }.toMutableList()
-        lines.add("$timeStr | $entry")
-        while (lines.size > 100) lines.removeAt(0)
-        prefs.edit().putString(KEY_NET_LOG, lines.joinToString("\n")).apply()
-    }
-
-    fun getNetLog(): String {
-        val summary = "Attempts: $netAttempts | onAvailable fired: $netAvailable"
-        val log = prefs.getString(KEY_NET_LOG, "") ?: ""
-        return if (log.isBlank()) summary else "$summary\n\n$log"
-    }
-
-    fun clearNetLog() {
-        prefs.edit()
-            .remove(KEY_NET_LOG)
-            .remove(KEY_NET_ATTEMPTS)
-            .remove(KEY_NET_AVAILABLE)
-            .apply()
     }
 }

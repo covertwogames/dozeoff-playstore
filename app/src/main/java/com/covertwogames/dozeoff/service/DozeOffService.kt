@@ -8,9 +8,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -122,28 +119,6 @@ class DozeOffService : Service() {
         val prefsManager = PrefsManager(this)
         prefsManager.lastPulseTime = System.currentTimeMillis()
         prefsManager.incrementPulseCount()
-
-        // Formal network request to wake the network stack
-        try {
-            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE)
-                    as ConnectivityManager
-            val networkRequest = NetworkRequest.Builder()
-                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                .build()
-            val callback = object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: android.net.Network) {
-                    Log.d(TAG, "Network available during immediate pulse")
-                }
-            }
-            connectivityManager.requestNetwork(networkRequest, callback)
-            Handler(Looper.getMainLooper()).postDelayed({
-                try {
-                    connectivityManager.unregisterNetworkCallback(callback)
-                } catch (e: Exception) { /* already unregistered */ }
-            }, 3000)
-        } catch (e: Exception) {
-            Log.d(TAG, "Network request skipped: ${e.message}")
-        }
 
         updateNotification()
         Log.d(TAG, "Immediate first pulse fired")

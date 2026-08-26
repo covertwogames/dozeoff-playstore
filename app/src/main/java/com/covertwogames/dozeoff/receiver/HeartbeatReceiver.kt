@@ -6,24 +6,17 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
-import android.os.Handler
-import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import com.covertwogames.dozeoff.MainActivity
 import com.covertwogames.dozeoff.util.PrefsManager
-import java.util.concurrent.atomic.AtomicBoolean
 
 class HeartbeatReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "HeartbeatReceiver"
-        private const val WAKELOCK_TIMEOUT = 10000L // upper bound; released as soon as the window closes
-        private const val NETWORK_WINDOW_MS = 3000L
+        private const val WAKELOCK_TIMEOUT = 10000L // safety cap; released in finally
         const val ACTION_HEARTBEAT = "com.covertwogames.dozeoff.HEARTBEAT"
         private const val REQUEST_CODE_HEARTBEAT = 0
         private const val REQUEST_CODE_ALARM_CLOCK = 1
@@ -158,34 +151,12 @@ class HeartbeatReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action != ACTION_HEARTBEAT) return
 
-        // Tell Android we have work outstanding beyond the return of this
-        // method. Without this the process can be torn down as soon as
-        // onReceive returns, which would cut the network window short.
-        val pendingResult = goAsync()
-
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         val wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "DozeOff::HeartbeatWakeLock"
         )
         wakeLock.acquire(WAKELOCK_TIMEOUT)
-
-        // Runs exactly once, whichever path we finish on.
-        val finished = AtomicBoolean(false)
-        val complete = {
-            if (finished.compareAndSet(false, true)) {
-                try {
-                    if (wakeLock.isHeld) wakeLock.release()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Wakelock release failed: ${e.message}")
-                }
-                try {
-                    pendingResult.finish()
-                } catch (e: Exception) {
-                    Log.e(TAG, "PendingResult finish failed: ${e.message}")
-                }
-            }
-        }
 
         try {
             Log.d(TAG, "Heartbeat pulse fired")
@@ -194,62 +165,19 @@ class HeartbeatReceiver : BroadcastReceiver() {
             prefsManager.lastPulseTime = System.currentTimeMillis()
             prefsManager.incrementPulseCount()
 
-            // Schedule the next pulse first, so the chain survives even if the
-            // network request below throws.
+            // Schedule the next pulse. This is the whole job: the pulse exists
+            // so that Max mode's setAlarmClock brings the device out of Doze,
+            // which is what lets every app's pending work run.
             scheduleNextPulse(context)
-
-            // Request network to formally wake the network stack. Releases the
-            // wakelock and finishes the broadcast when the window closes.
-            performNetworkRequest(context, complete)
 
         } catch (e: Exception) {
             Log.e(TAG, "Pulse failed: ${e.message}")
-            complete()
-        }
-    }
-
-    private fun performNetworkRequest(context: Context, onComplete: () -> Unit) {
-        val prefsManager = PrefsManager(context)
-        try {
-            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
-                    as ConnectivityManager
-
-            val networkRequest = NetworkRequest.Builder()
-                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                .build()
-
-            val requestedAt = SystemClock.elapsedRealtime()
-            val recorded = AtomicBoolean(false)
-
-            val callback = object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: android.net.Network) {
-                    if (recorded.compareAndSet(false, true)) {
-                        val elapsed = SystemClock.elapsedRealtime() - requestedAt
-                        prefsManager.recordNetAvailable(elapsed)
-                        Log.d(TAG, "Network available after ${elapsed}ms")
-                    }
-                }
+        } finally {
+            try {
+                if (wakeLock.isHeld) wakeLock.release()
+            } catch (e: Exception) {
+                Log.e(TAG, "Wakelock release failed: ${e.message}")
             }
-
-            prefsManager.recordNetAttempt()
-            connectivityManager.requestNetwork(networkRequest, callback)
-
-            Handler(Looper.getMainLooper()).postDelayed({
-                try {
-                    connectivityManager.unregisterNetworkCallback(callback)
-                } catch (e: Exception) {
-                    // Already unregistered
-                }
-                if (!recorded.get()) {
-                    prefsManager.addNetLogEntry("no onAvailable within window")
-                }
-                onComplete()
-            }, NETWORK_WINDOW_MS)
-
-        } catch (e: Exception) {
-            Log.d(TAG, "Network request skipped: ${e.message}")
-            prefsManager.addNetLogEntry("request threw: ${e.message}")
-            onComplete()
         }
     }
 }
