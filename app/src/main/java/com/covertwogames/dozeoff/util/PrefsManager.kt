@@ -18,15 +18,15 @@ class PrefsManager(context: Context) {
         private const val KEY_BATTERY_STEP_COMPLETED = "battery_step_completed"
         private const val KEY_PROTECTION_LEVEL = "protection_level"
         private const val KEY_MAX_CONFIRMED = "max_confirmed"
+        private const val KEY_INTRO_SHOWN = "intro_shown"
         private const val KEY_MAX_VERIFIED = "max_verified"
         private const val KEY_DASHBOARD_OPEN_COUNT = "dashboard_open_count"
         private const val KEY_LAST_REVIEW_REQUEST_OPEN = "last_review_request_open"
-        private const val KEY_TEST_LOG = "test_log"   // TEST BUILD ONLY
 
         const val DEFAULT_INTERVAL = 10 // minutes
 
         const val LEVEL_OFF = 0
-        const val LEVEL_ON = 1
+        const val LEVEL_BALANCED = 1
         const val LEVEL_MAX = 2
     }
 
@@ -66,6 +66,11 @@ class PrefsManager(context: Context) {
         get() = prefs.getBoolean(KEY_MAX_CONFIRMED, false)
         set(value) = prefs.edit().putBoolean(KEY_MAX_CONFIRMED, value).apply()
 
+    // Whether the first-run mode explainer has been shown.
+    var isIntroShown: Boolean
+        get() = prefs.getBoolean(KEY_INTRO_SHOWN, false)
+        set(value) = prefs.edit().putBoolean(KEY_INTRO_SHOWN, value).apply()
+
     var isMaxVerified: Boolean
         get() = prefs.getBoolean(KEY_MAX_VERIFIED, false)
         set(value) = prefs.edit().putBoolean(KEY_MAX_VERIFIED, value).apply()
@@ -87,17 +92,4 @@ class PrefsManager(context: Context) {
     fun incrementPulseCount() {
         totalPulses = totalPulses + 1
     }
-
-    // ---- TEST BUILD ONLY ----
-    fun addTestLogEntry(entry: String) {
-        val existing = prefs.getString(KEY_TEST_LOG, "") ?: ""
-        val lines = existing.split("\n").filter { it.isNotBlank() }.toMutableList()
-        lines.add(entry)
-        while (lines.size > 250) lines.removeAt(0)
-        prefs.edit().putString(KEY_TEST_LOG, lines.joinToString("\n")).commit()
-    }
-
-    fun getTestLog(): String = prefs.getString(KEY_TEST_LOG, "No entries yet") ?: "No entries yet"
-
-    fun clearTestLog() { prefs.edit().remove(KEY_TEST_LOG).apply() }
 }

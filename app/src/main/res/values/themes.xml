@@ -10,6 +10,13 @@
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
+    <!-- First-run mode explainer. Width is set in code; a transparent window
+         background lets the rounded drawable on the content show through. -->
+    <style name="Theme.DozeOff.Dialog" parent="Theme.Material3.Dark.Dialog">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+    </style>
+
     <style name="Theme.DozeOff.Splash" parent="Theme.Material3.Dark.NoActionBar">
         <item name="android:windowBackground">@color/primary</item>
         <item name="android:statusBarColor">@color/primary</item>

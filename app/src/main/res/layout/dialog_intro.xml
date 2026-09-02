@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/intro_dialog_bg"
+    android:orientation="vertical"
+    android:paddingTop="28dp"
+    android:paddingBottom="20dp">
+
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/introPager"
+        android:layout_width="match_parent"
+        android:layout_height="380dp" />
+
+    <!-- Page dots, populated in code so their size is under our control. -->
+    <LinearLayout
+        android:id="@+id/introDots"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="20dp"
+        android:orientation="horizontal" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnIntroNext"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginTop="20dp"
+        android:text="Next"
+        android:textColor="@android:color/white"
+        android:textSize="16sp"
+        app:backgroundTint="@color/primary"
+        app:cornerRadius="12dp" />
+
+</LinearLayout>

@@ -8,13 +8,14 @@ import android.util.Log
 import com.covertwogames.dozeoff.util.PrefsManager
 
 /**
- * Listens for DND state changes in real-time.
- * When DND turns on while Max mode is active (with respectDnd enabled),
- * immediately cancels any pending setAlarmClock alarms and reschedules
- * as standard mode. This prevents the alarm clock from firing during DND,
- * which would cause Android to disable DND.
+ * Listens for DND state changes in real time.
  *
- * Remove when done debugging if not needed.
+ * When DND turns on, immediately cancels any pending alarm clock and
+ * reschedules, so the clock cannot fire during DND. An alarm clock firing while
+ * DND is active causes Android to switch DND off, which reads to the user as
+ * their Bedtime Mode mysteriously turning itself off.
+ *
+ * When DND ends, reschedules so the selected mode resumes.
  */
 class DndChangeReceiver : BroadcastReceiver() {
 
@@ -27,8 +28,9 @@ class DndChangeReceiver : BroadcastReceiver() {
 
         val prefsManager = PrefsManager(context)
 
-        // Only act if user is in Max mode with respectDnd enabled
-        if (prefsManager.protectionLevel != PrefsManager.LEVEL_MAX) return
+        // Act for any active mode. Both Max and Balanced register alarm clocks
+        // that need cancelling before they can fire during DND.
+        if (prefsManager.protectionLevel == PrefsManager.LEVEL_OFF) return
         if (!prefsManager.respectDnd) return
         if (!prefsManager.isEnabled) return
 

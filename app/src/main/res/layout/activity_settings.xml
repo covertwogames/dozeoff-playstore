@@ -48,7 +48,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="Note: In Minimum mode, Android limits pulses to roughly one every 15 minutes once your device is in deep sleep, regardless of this setting. Max mode uses these intervals exactly."
+                android:text="Note: This sets how often Balanced mode wakes your device. Max mode does not use pulses, so this setting has no effect while Max is selected."
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp"
                 android:fontStyle="italic" />
@@ -162,7 +162,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:text="What's the difference between Minimum &amp; Max protection?"
+                android:text="What's the difference between Balanced &amp; Max?"
                 android:textColor="@color/text_primary"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -171,7 +171,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Minimum Protection (Min)"
+                android:text="Max Protection (Max)"
                 android:textColor="@color/text_primary"
                 android:textSize="14sp"
                 android:textStyle="bold" />
@@ -181,7 +181,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:lineSpacingExtra="3dp"
-                android:text="DozeOff sends a regular background pulse (frequency set above) that works within Android's normal battery rules. Android limits these pulses to roughly one every 15 minutes once your device is in deep sleep, and they don't bring the device fully out of it.\n\nThis means Minimum uses very little battery and shows no icons, but other apps' notifications may still be delayed while your phone is asleep.\n\nMinimum is the conservative choice. If timely notifications are the reason you installed DozeOff, use Max."
+                android:text="Max keeps a standing silent alarm registered with Android at all times. Because Android will not put a device into deep Doze sleep when an alarm is due soon, your phone stays awake enough for notifications from every app to arrive as they are sent.\n\nThis is the most effective mode, and it is the default.\n\nThe trade-off is visibility. On some devices a small alarm icon appears in the status bar, and the alarm time may show on your lock screen. Whether this happens depends entirely on your device, and many phones never show it. You will never hear an alarm, and it is not something DozeOff can turn off."
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
 
@@ -189,7 +189,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:text="Maximum Protection (Max)"
+                android:text="Balanced Protection (Balanced)"
                 android:textColor="@color/text_primary"
                 android:textSize="14sp"
                 android:textStyle="bold" />
@@ -199,7 +199,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:lineSpacingExtra="3dp"
-                android:text="Max uses a stronger method that Android cannot delay or skip. Each pulse briefly brings your whole device out of deep sleep, which is when Android delivers all pending notifications, messages and syncs from every app. This is the mode that actually addresses delayed notifications.\n\nTwo things to be aware of:\n\n1) A small alarm clock icon may appear in your status bar. Whether it appears depends on your device, and many phones never show it.\n\n2) Max can interfere with Do Not Disturb and Bedtime modes. DozeOff pauses Max while those are active and resumes automatically when they end.\n\nBattery impact for both modes is minimal — typically 1-2% per day."
+                android:text="Balanced lets your device sleep normally, then briefly wakes it at the interval you choose. Each wake pulls the device fully out of Doze for a couple of minutes, which is long enough for pending notifications, messages and syncs from every app to come through.\n\nNothing appears in your status bar or on your lock screen.\n\nThe trade-off is timing. A notification that arrives just after a pulse waits for the next one, so it can be delayed by up to the interval you have set. Shorter intervals mean less delay and slightly more battery use.\n\nDozeOff pauses while your phone is in Do Not Disturb or Bedtime Mode, so it does not interfere with those settings. Whichever mode you have selected resumes automatically when they end.\n\nBattery impact for both modes is minimal."
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
 
@@ -216,67 +216,6 @@
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
 
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginVertical="24dp"
-                android:background="@color/divider" />
-
-            <!-- TEST BUILD ONLY -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Short-lead Test Log"
-                android:textColor="@color/text_primary"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/textTestLog"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="@color/divider"
-                android:fontFamily="monospace"
-                android:padding="12dp"
-                android:text="No entries yet"
-                android:textColor="@color/text_secondary"
-                android:textSize="11sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnCopyTestLog"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="40dp"
-                    android:layout_marginEnd="8dp"
-                    android:layout_weight="1"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:text="Copy Log"
-                    android:textSize="12sp"
-                    app:cornerRadius="8dp"
-                    app:strokeColor="@color/primary" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnClearTestLog"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="40dp"
-                    android:layout_weight="1"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:text="Clear"
-                    android:textSize="12sp"
-                    app:cornerRadius="8dp"
-                    app:strokeColor="@color/text_secondary" />
-
-            </LinearLayout>
 
 
         </LinearLayout>

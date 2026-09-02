@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
     private var billingManager: BillingManager? = null
     private var isUpdatingToggle = false
     private var waitingForAlarmPermission = false
+    private var pendingLevel = PrefsManager.LEVEL_MAX
 
     private val refreshHandler = Handler(Looper.getMainLooper())
     private val refreshRunnable = object : Runnable {
@@ -79,11 +80,13 @@ class MainActivity : AppCompatActivity() {
             requestInAppReview()
         }
 
-        // First run after onboarding: onboarding now activates Max directly, so
-        // the user never taps the Max button. Show the explainer once here.
+        // First run after onboarding: show the mode explainer once. Onboarding
+        // activates Max directly, so the user never taps the button and would
+        // otherwise never learn the modes exist.
         if (prefsManager.protectionLevel == PrefsManager.LEVEL_MAX &&
-            !prefsManager.isMaxConfirmed) {
-            showMaxConfirmDialog()
+            !prefsManager.isIntroShown) {
+            prefsManager.isIntroShown = true
+            IntroDialog.show(this)
         }
     }
 
@@ -94,13 +97,12 @@ class MainActivity : AppCompatActivity() {
         if (waitingForAlarmPermission) {
             waitingForAlarmPermission = false
             if (canScheduleExactAlarms()) {
-                // Permission granted — activate Max
-                setProtectionLevel(PrefsManager.LEVEL_MAX)
+                setProtectionLevel(pendingLevel)
             } else {
                 // Permission denied — revert to previous level
                 Toast.makeText(
                     this,
-                    "Alarm permission is required for Max mode",
+                    "Alarm permission is required for DozeOff to work",
                     Toast.LENGTH_SHORT
                 ).show()
                 revertToggle()
@@ -154,17 +156,11 @@ class MainActivity : AppCompatActivity() {
             if (!isChecked) return@addOnButtonCheckedListener
             if (isUpdatingToggle) return@addOnButtonCheckedListener
 
+            // Switching is silent. The first-run explainer covers both modes.
             when (checkedId) {
                 R.id.btnOff -> setProtectionLevel(PrefsManager.LEVEL_OFF)
-                R.id.btnOn -> setProtectionLevel(PrefsManager.LEVEL_ON)
-                R.id.btnMax -> {
-                    if (prefsManager.isMaxConfirmed) {
-                        // Already confirmed once — just check permission
-                        activateMaxIfPermitted()
-                    } else {
-                        showMaxConfirmDialog()
-                    }
-                }
+                R.id.btnOn -> activateIfPermitted(PrefsManager.LEVEL_BALANCED)
+                R.id.btnMax -> activateIfPermitted(PrefsManager.LEVEL_MAX)
             }
         }
 
@@ -173,10 +169,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun activateMaxIfPermitted() {
+    /**
+     * Both modes need exact alarms now: Max uses an alarm clock, Balanced uses
+     * an exact allow-while-idle wake-up. So the permission gate applies to
+     * either, not just Max.
+     */
+    private fun activateIfPermitted(level: Int) {
         if (canScheduleExactAlarms()) {
-            setProtectionLevel(PrefsManager.LEVEL_MAX)
+            setProtectionLevel(level)
         } else {
+            pendingLevel = level
             requestAlarmPermission()
         }
     }
@@ -190,7 +192,7 @@ class MainActivity : AppCompatActivity() {
             PrefsManager.LEVEL_OFF -> {
                 stopDozeOffService()
             }
-            PrefsManager.LEVEL_ON, PrefsManager.LEVEL_MAX -> {
+            PrefsManager.LEVEL_BALANCED, PrefsManager.LEVEL_MAX -> {
                 if (previousLevel == PrefsManager.LEVEL_OFF) {
                     startDozeOffService()
                 } else {
@@ -207,37 +209,12 @@ class MainActivity : AppCompatActivity() {
         isUpdatingToggle = true
         when (prefsManager.protectionLevel) {
             PrefsManager.LEVEL_OFF -> binding.toggleProtection.check(R.id.btnOff)
-            PrefsManager.LEVEL_ON -> binding.toggleProtection.check(R.id.btnOn)
+            PrefsManager.LEVEL_BALANCED -> binding.toggleProtection.check(R.id.btnOn)
             PrefsManager.LEVEL_MAX -> binding.toggleProtection.check(R.id.btnMax)
         }
         isUpdatingToggle = false
     }
 
-    private fun showMaxConfirmDialog() {
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-            .setTitle("Maximum Protection Enabled")
-            .setMessage(
-                "Max is the mode that does the real work. It briefly wakes " +
-                "your device on a schedule so that pending notifications " +
-                "from all your apps arrive on time, instead of piling up " +
-                "until you next unlock.\n\n" +
-                "On some devices a small alarm clock icon appears in the " +
-                "status bar while Max is on. This isn't something DozeOff " +
-                "can disable if it shows on your device.\n\n" +
-                "You can switch to Minimum protection any time from the " +
-                "home screen."
-            )
-            .setPositiveButton("OK") { _, _ ->
-                prefsManager.isMaxConfirmed = true
-                activateMaxIfPermitted()
-            }
-            .setOnCancelListener {
-                prefsManager.isMaxConfirmed = true
-                activateMaxIfPermitted()
-            }
-            .create()
-            .show()
-    }
 
     // -----------------------------------------------------------------------
     // Health checks
@@ -293,7 +270,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnFixService.setOnClickListener {
-            prefsManager.protectionLevel = PrefsManager.LEVEL_ON
+            // Restart the service without changing the selected mode. Forcing a
+            // level here would silently demote a Max user to Balanced.
+            if (prefsManager.protectionLevel == PrefsManager.LEVEL_OFF) {
+                prefsManager.protectionLevel = PrefsManager.LEVEL_MAX
+            }
             prefsManager.isEnabled = true
             startDozeOffService()
             refreshDashboard()
@@ -328,29 +309,24 @@ class MainActivity : AppCompatActivity() {
         isUpdatingToggle = true
         when (level) {
             PrefsManager.LEVEL_OFF -> binding.toggleProtection.check(R.id.btnOff)
-            PrefsManager.LEVEL_ON -> binding.toggleProtection.check(R.id.btnOn)
+            PrefsManager.LEVEL_BALANCED -> binding.toggleProtection.check(R.id.btnOn)
             PrefsManager.LEVEL_MAX -> binding.toggleProtection.check(R.id.btnMax)
         }
         isUpdatingToggle = false
 
         if (level != PrefsManager.LEVEL_OFF && health.serviceRunning) {
-            val isDndLimited = level == PrefsManager.LEVEL_MAX &&
-                    prefsManager.respectDnd &&
-                    HeartbeatReceiver.isDndActive(this)
-
-            if (isDndLimited) {
+            if (HeartbeatReceiver.isPausedForDnd(this)) {
                 binding.statusIcon.setColorFilter(getColor(R.color.success))
-                binding.statusText.text = "Max Protection Paused"
+                binding.statusText.text = "Protection Paused"
                 binding.statusText.setTextColor(getColor(R.color.warning))
                 binding.btnDndInfo.visibility = View.VISIBLE
             } else {
                 binding.statusIcon.setColorFilter(getColor(R.color.success))
-                val modeText = if (level == PrefsManager.LEVEL_MAX) {
-                    if (prefsManager.isMaxVerified) "Max Protection Active ✓" else "Max Protection Active (unverified)"
+                binding.statusText.text = if (level == PrefsManager.LEVEL_MAX) {
+                    "Max Protection Active"
                 } else {
-                    "Minimum Protection Active"
+                    "Balanced Protection Active"
                 }
-                binding.statusText.text = modeText
                 binding.statusText.setTextColor(getColor(R.color.success))
                 binding.btnDndInfo.visibility = View.GONE
             }
@@ -521,12 +497,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun showDndInfoDialog() {
         com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-            .setTitle("Max Protection Paused")
+            .setTitle("Protection Paused")
             .setMessage(
-                "DozeOff pauses Max protection while Do Not Disturb or " +
-                "Bedtime Mode is active, because Max can interfere with " +
-                "those settings.\n\n" +
-                "Max resumes automatically when Do Not Disturb ends."
+                "DozeOff pauses while your phone is in Do Not Disturb or " +
+                "Bedtime Mode, so it doesn't interfere with those settings.\n\n" +
+                "Whichever mode you've selected resumes automatically when " +
+                "they end."
             )
             .setPositiveButton("OK", null)
             .create()
