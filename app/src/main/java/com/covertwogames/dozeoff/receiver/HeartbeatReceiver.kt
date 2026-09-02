@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
@@ -18,6 +19,14 @@ class HeartbeatReceiver : BroadcastReceiver() {
         private const val TAG = "HeartbeatReceiver"
         private const val WAKELOCK_TIMEOUT = 10000L // safety cap; released in finally
         const val ACTION_HEARTBEAT = "com.covertwogames.dozeoff.HEARTBEAT"
+
+        // TEST BUILD: short-lead alarm clock experiment.
+        // The standard alarm wakes us; if the device is in deep Doze we then
+        // place an alarm clock only ALARM_CLOCK_LEAD_MS ahead, so it is the
+        // device's "next alarm" for a few seconds instead of continuously.
+        // Change this one number to retest with a different lead.
+        const val ACTION_ALARM_CLOCK_PULSE = "com.covertwogames.dozeoff.ALARM_CLOCK_PULSE"
+        private const val ALARM_CLOCK_LEAD_MS = 3000L
         private const val REQUEST_CODE_HEARTBEAT = 0
         private const val REQUEST_CODE_ALARM_CLOCK = 1
 
@@ -58,49 +67,42 @@ class HeartbeatReceiver : BroadcastReceiver() {
                 action = ACTION_HEARTBEAT
             }
 
-            val useMaxScheduling = isUsingMaxScheduling(context)
-
-            // Always cancel BOTH alarm types before scheduling.
-            // This prevents a stale setAlarmClock from firing after we switch
-            // to standard mode (which would cause Android to disable DND).
             cancelPulses(context)
 
-            if (useMaxScheduling) {
-                // Max mode: use setAlarmClock for unrestricted, unthrottled alarms
-                // with system-wide Doze relaxation window
-                try {
-                    val pendingIntent = PendingIntent.getBroadcast(
-                        context,
-                        REQUEST_CODE_ALARM_CLOCK,
-                        intent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
+            // TEST BUILD: no standing alarm clock in either mode. The alarm
+            // clock is placed only for a few seconds at a time, in onReceive.
+            scheduleNormalAlarm(context, alarmManager, intent, intervalMs, prefsManager)
+        }
 
-                    // Show info intent — tapping the alarm icon in status bar opens the app
-                    val showIntent = PendingIntent.getActivity(
-                        context,
-                        0,
-                        Intent(context, MainActivity::class.java),
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-
-                    val alarmClockInfo = AlarmManager.AlarmClockInfo(
-                        System.currentTimeMillis() + intervalMs,
-                        showIntent
-                    )
-
-                    alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
-                    prefsManager.isMaxVerified = true
-                    Log.d(TAG, "MAX: Next alarm clock scheduled in ${prefsManager.pulseIntervalMinutes} minutes")
-                } catch (e: SecurityException) {
-                    // Permission not granted — fall back to normal mode
-                    Log.e(TAG, "MAX: setAlarmClock failed (SecurityException), falling back to normal mode")
-                    prefsManager.isMaxVerified = false
-                    scheduleNormalAlarm(context, alarmManager, intent, intervalMs, prefsManager)
-                }
-
-            } else {
-                scheduleNormalAlarm(context, alarmManager, intent, intervalMs, prefsManager)
+        /**
+         * TEST BUILD: place an alarm clock a few seconds out. This is what
+         * brings the device out of Doze, while only being the device's "next
+         * alarm" briefly rather than continuously.
+         */
+        fun placeShortLeadAlarmClock(context: Context) {
+            val prefsManager = PrefsManager(context)
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(context, HeartbeatReceiver::class.java).apply {
+                action = ACTION_ALARM_CLOCK_PULSE
+            }
+            try {
+                val pendingIntent = PendingIntent.getBroadcast(
+                    context, REQUEST_CODE_ALARM_CLOCK, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                val showIntent = PendingIntent.getActivity(
+                    context, 0, Intent(context, MainActivity::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                val info = AlarmManager.AlarmClockInfo(
+                    System.currentTimeMillis() + ALARM_CLOCK_LEAD_MS, showIntent
+                )
+                alarmManager.setAlarmClock(info, pendingIntent)
+                prefsManager.isMaxVerified = true
+                Log.d(TAG, "Short-lead alarm clock placed (+${ALARM_CLOCK_LEAD_MS}ms)")
+            } catch (e: SecurityException) {
+                Log.e(TAG, "setAlarmClock failed: ${e.message}")
+                prefsManager.isMaxVerified = false
             }
         }
 
@@ -117,12 +119,16 @@ class HeartbeatReceiver : BroadcastReceiver() {
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            alarmManager.setAndAllowWhileIdle(
+            // TEST BUILD: exact variant. Same Doze exemption and 15-minute
+            // limit as setAndAllowWhileIdle, but asks for the exact time rather
+            // than an inexact window. Some OEM schedulers defer inexact alarms
+            // far more aggressively; testing whether exact ones are honoured.
+            alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.ELAPSED_REALTIME_WAKEUP,
                 SystemClock.elapsedRealtime() + intervalMs,
                 pendingIntent
             )
-            Log.d(TAG, "ON: Next pulse scheduled in ${prefsManager.pulseIntervalMinutes} minutes")
+            Log.d(TAG, "Next wake-up scheduled in ${prefsManager.pulseIntervalMinutes} minutes (exact)")
         }
 
         fun cancelPulses(context: Context) {
@@ -138,8 +144,13 @@ class HeartbeatReceiver : BroadcastReceiver() {
             )
             alarmManager.cancel(normalPending)
 
+            // The alarm clock uses its own action; PendingIntent matching
+            // takes the action into account, so it needs its own intent here.
+            val clockIntent = Intent(context, HeartbeatReceiver::class.java).apply {
+                action = ACTION_ALARM_CLOCK_PULSE
+            }
             val alarmClockPending = PendingIntent.getBroadcast(
-                context, REQUEST_CODE_ALARM_CLOCK, intent,
+                context, REQUEST_CODE_ALARM_CLOCK, clockIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             alarmManager.cancel(alarmClockPending)
@@ -149,7 +160,8 @@ class HeartbeatReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action != ACTION_HEARTBEAT) return
+        val action = intent?.action
+        if (action != ACTION_HEARTBEAT && action != ACTION_ALARM_CLOCK_PULSE) return
 
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         val wakeLock = powerManager.newWakeLock(
@@ -159,16 +171,40 @@ class HeartbeatReceiver : BroadcastReceiver() {
         wakeLock.acquire(WAKELOCK_TIMEOUT)
 
         try {
-            Log.d(TAG, "Heartbeat pulse fired")
-
             val prefsManager = PrefsManager(context)
-            prefsManager.lastPulseTime = System.currentTimeMillis()
-            prefsManager.incrementPulseCount()
 
-            // Schedule the next pulse. This is the whole job: the pulse exists
-            // so that Max mode's setAlarmClock brings the device out of Doze,
-            // which is what lets every app's pending work run.
-            scheduleNextPulse(context)
+            val idleNow = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                powerManager.isDeviceIdleMode
+            } else false
+            val time = java.text.SimpleDateFormat("h:mm:ss a", java.util.Locale.getDefault())
+                .format(java.util.Date())
+            val maxMode = isUsingMaxScheduling(context)
+
+            if (action == ACTION_HEARTBEAT) {
+                if (maxMode && idleNow) {
+                    // In Doze: place the short-lead alarm clock to pull the
+                    // device out. The pulse is counted when that alarm fires.
+                    prefsManager.addTestLogEntry("$time | STD fired  | idle=true  | placing clock")
+                    placeShortLeadAlarmClock(context)
+                } else {
+                    // Either Min mode, or Max with the device already awake.
+                    // Nothing to pull out of Doze, so no alarm clock and no
+                    // status bar icon. Just keep the chain alive.
+                    val why = if (!maxMode) "min mode" else "awake, skipped clock"
+                    prefsManager.addTestLogEntry("$time | STD fired  | idle=$idleNow | $why")
+                    prefsManager.lastPulseTime = System.currentTimeMillis()
+                    prefsManager.incrementPulseCount()
+                    scheduleNextPulse(context)
+                }
+
+            } else {
+                // The short-lead alarm clock fired. idle should read false here
+                // if the Doze exit worked.
+                prefsManager.addTestLogEntry("$time | CLOCK fired| idle=$idleNow | exited=${!idleNow}")
+                prefsManager.lastPulseTime = System.currentTimeMillis()
+                prefsManager.incrementPulseCount()
+                scheduleNextPulse(context)
+            }
 
         } catch (e: Exception) {
             Log.e(TAG, "Pulse failed: ${e.message}")

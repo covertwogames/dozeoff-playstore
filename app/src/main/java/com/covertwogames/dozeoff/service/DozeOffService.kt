@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
+import android.os.PowerManager
+import android.content.BroadcastReceiver
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
@@ -39,6 +41,7 @@ class DozeOffService : Service() {
 
     private var notificationUpdateTimer: Timer? = null
     private var dndReceiver: DndChangeReceiver? = null
+    private var idleReceiver: BroadcastReceiver? = null   // TEST BUILD ONLY
     private var lastWatchdogRearmAt = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -93,6 +96,60 @@ class DozeOffService : Service() {
             }
         }
 
+        // TEST BUILD ONLY: log every Doze transition with a timestamp so we can
+        // measure how long the device stays out of Doze after our alarm clock
+        // pulls it out. Answers the question "is the window long enough for
+        // other apps to deliver?"
+        if (idleReceiver == null) {
+            idleReceiver = object : BroadcastReceiver() {
+                override fun onReceive(ctx: Context, intent: Intent?) {
+                    if (intent?.action != PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED) return
+                    val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
+                    val idle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) pm.isDeviceIdleMode else false
+                    val time = java.text.SimpleDateFormat("h:mm:ss a", java.util.Locale.getDefault())
+                        .format(java.util.Date())
+                    val prefs = PrefsManager(ctx)
+                    prefs.addTestLogEntry(
+                        "$time | DOZE ${if (idle) "ENTER" else "EXIT "} |"
+                    )
+
+                    // TEST BUILD: piggyback on natural Doze exits. If the device
+                    // has left Doze on its own and our wake-up is overdue, the
+                    // wake-up was buried by the OEM. Re-arm it now while the
+                    // device is awake, rather than waiting for the buried one.
+                    // Reuses the watchdog cooldown so this cannot re-arm every
+                    // exit and starve the chain.
+                    if (!idle && prefs.protectionLevel != PrefsManager.LEVEL_OFF) {
+                        val now = System.currentTimeMillis()
+                        val intervalMs = prefs.pulseIntervalMinutes * 60 * 1000L
+                        val graceMs = WATCHDOG_MAX_GRACE_MINUTES * 60 * 1000L
+                        val lastPulse = prefs.lastPulseTime
+                        val overdue = lastPulse > 0L && now - lastPulse > intervalMs + graceMs
+                        val coolingDown = lastWatchdogRearmAt != 0L && now - lastWatchdogRearmAt < intervalMs
+                        if (overdue && !coolingDown) {
+                            lastWatchdogRearmAt = now
+                            prefs.addTestLogEntry(
+                                "$time | RE-ARM     | wake-up overdue by ${(now - lastPulse - intervalMs) / 60000}m, re-armed on natural exit"
+                            )
+                            HeartbeatReceiver.scheduleNextPulse(ctx)
+                        }
+                    }
+                }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(
+                    idleReceiver,
+                    IntentFilter(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED),
+                    Context.RECEIVER_NOT_EXPORTED
+                )
+            } else {
+                registerReceiver(
+                    idleReceiver,
+                    IntentFilter(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
+                )
+            }
+        }
+
         Log.d(TAG, "Service fully started, heartbeat chain active")
 
         return START_STICKY
@@ -108,6 +165,12 @@ class DozeOffService : Service() {
             try { unregisterReceiver(it) } catch (e: Exception) { /* already unregistered */ }
         }
         dndReceiver = null
+
+        // TEST BUILD ONLY
+        idleReceiver?.let {
+            try { unregisterReceiver(it) } catch (e: Exception) { /* already unregistered */ }
+        }
+        idleReceiver = null
 
         notificationUpdateTimer?.cancel()
         notificationUpdateTimer = null

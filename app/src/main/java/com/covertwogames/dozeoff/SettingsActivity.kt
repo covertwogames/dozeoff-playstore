@@ -58,5 +58,17 @@ class SettingsActivity : AppCompatActivity() {
                     android.net.Uri.parse("https://play.google.com/store/apps/details?id=com.covertwogames.dozeoff")))
             }
         }
+
+        // TEST BUILD ONLY
+        binding.textTestLog.text = prefsManager.getTestLog()
+        binding.btnCopyTestLog.setOnClickListener {
+            val cb = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cb.setPrimaryClip(android.content.ClipData.newPlainText("DozeOff Test Log", prefsManager.getTestLog()))
+            android.widget.Toast.makeText(this, "Log copied", android.widget.Toast.LENGTH_SHORT).show()
+        }
+        binding.btnClearTestLog.setOnClickListener {
+            prefsManager.clearTestLog()
+            binding.textTestLog.text = "No entries yet"
+        }
     }
 }
