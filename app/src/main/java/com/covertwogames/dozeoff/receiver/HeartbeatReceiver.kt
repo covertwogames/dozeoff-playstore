@@ -168,12 +168,21 @@ class HeartbeatReceiver : BroadcastReceiver() {
                 context, REQUEST_CODE_HEARTBEAT, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                SystemClock.elapsedRealtime() + intervalMs,
-                pendingIntent
-            )
-            Log.d(TAG, "Wake-up scheduled ${prefsManager.pulseIntervalMinutes}m out")
+            try {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + intervalMs,
+                    pendingIntent
+                )
+                Log.d(TAG, "Wake-up scheduled ${prefsManager.pulseIntervalMinutes}m out")
+            } catch (e: SecurityException) {
+                // Android refuses exact alarms when DozeOff has neither the
+                // Alarms & reminders permission nor a battery exemption. Log
+                // and stop rather than crash. Nothing is scheduled, so the
+                // dashboard reports "Protection Not Working" until the user
+                // restores the permission, at which point the chain is re-armed.
+                Log.e(TAG, "Exact alarm refused, nothing scheduled: ${e.message}")
+            }
         }
 
         /** Where the alarm indicator points, on devices that show one. */

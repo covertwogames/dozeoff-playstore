@@ -28,6 +28,16 @@ class MainActivity : AppCompatActivity() {
     private var waitingForAlarmPermission = false
     private var pendingLevel = PrefsManager.LEVEL_MAX
 
+    // True while protection is on but Android won't let DozeOff schedule exact
+    // alarms. Refreshed by refreshDashboard and read by the status ? button.
+    private var alarmsBlocked = false
+
+    // Set when the user taps Fix on the alarms-blocked dialog, so onResume knows
+    // to re-arm the chain on return. Kept separate from waitingForAlarmPermission,
+    // which belongs to mode switching and would change the level or revert the
+    // toggle on return.
+    private var waitingForAlarmFix = false
+
     private val refreshHandler = Handler(Looper.getMainLooper())
     private val refreshRunnable = object : Runnable {
         override fun run() {
@@ -109,6 +119,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Returning from the alarms-blocked Fix. If the permission is now
+        // there, re-arm the chain straight away rather than waiting for the
+        // watchdog, whose cooldown could otherwise add up to an interval.
+        if (waitingForAlarmFix) {
+            waitingForAlarmFix = false
+            if (prefsManager.protectionLevel != PrefsManager.LEVEL_OFF &&
+                canScheduleExactAlarms()
+            ) {
+                HeartbeatReceiver.scheduleNextPulse(this)
+            }
+        }
+
         refreshDashboard()
         refreshHandler.postDelayed(refreshRunnable, 15000)
     }
@@ -165,7 +187,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnDndInfo.setOnClickListener {
-            showDndInfoDialog()
+            if (alarmsBlocked) showAlarmsBlockedDialog() else showDndInfoDialog()
         }
     }
 
@@ -314,7 +336,17 @@ class MainActivity : AppCompatActivity() {
         }
         isUpdatingToggle = false
 
-        if (level != PrefsManager.LEVEL_OFF && health.serviceRunning) {
+        // Blocked takes precedence. If Android won't allow exact alarms,
+        // nothing is scheduled in either mode, so protection is not working
+        // whatever else the dashboard would otherwise say.
+        alarmsBlocked = level != PrefsManager.LEVEL_OFF && !canScheduleExactAlarms()
+
+        if (alarmsBlocked) {
+            binding.statusIcon.setColorFilter(getColor(R.color.warning))
+            binding.statusText.text = "Protection Not Working"
+            binding.statusText.setTextColor(getColor(R.color.warning))
+            binding.btnDndInfo.visibility = View.VISIBLE
+        } else if (level != PrefsManager.LEVEL_OFF && health.serviceRunning) {
             if (HeartbeatReceiver.isPausedForDnd(this)) {
                 binding.statusIcon.setColorFilter(getColor(R.color.success))
                 binding.statusText.text = "Protection Paused"
@@ -493,6 +525,41 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton("Dismiss", null)
             .create()
             .show()
+    }
+
+    private fun showAlarmsBlockedDialog() {
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("Alarms are blocked")
+            .setMessage(
+                "DozeOff needs permission to schedule alarms to keep your " +
+                "notifications on time, and Android isn't currently allowing " +
+                "it. Some phones reset this setting on their own.\n\n" +
+                "Tap Fix and turn on Alarms & reminders, then come back to DozeOff."
+            )
+            .setPositiveButton("Fix") { _, _ -> openAlarmSettingsForFix() }
+            .setNegativeButton("Not now", null)
+            .create()
+            .show()
+    }
+
+    private fun openAlarmSettingsForFix() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            waitingForAlarmFix = true
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                )
+            } catch (e: Exception) {
+                waitingForAlarmFix = false
+                Toast.makeText(
+                    this,
+                    "Open Settings, find DozeOff, and allow Alarms & reminders",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     private fun showDndInfoDialog() {

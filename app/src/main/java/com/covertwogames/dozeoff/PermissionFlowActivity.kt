@@ -1,6 +1,7 @@
 package com.covertwogames.dozeoff
 
 import android.Manifest
+import android.app.AlarmManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -20,11 +21,18 @@ import com.covertwogames.dozeoff.util.PrefsManager
 
 class PermissionFlowActivity : AppCompatActivity() {
 
+    companion object {
+        private const val KEY_CURRENT_STEP = "currentStepType"
+        private const val STEP_DONE = "DONE"
+    }
+
     private lateinit var binding: ActivityPermissionStepBinding
     private lateinit var prefsManager: PrefsManager
     private val handler = Handler(Looper.getMainLooper())
 
-    private enum class StepType { NOTIFICATION, BATTERY, OEM }
+    // Declaration order must match the order buildStepList adds steps in.
+    // Restoring after recreation relies on it to find the next step.
+    private enum class StepType { NOTIFICATION, ALARM, BATTERY, OEM }
 
     private data class Step(
         val type: StepType,
@@ -60,7 +68,7 @@ class PermissionFlowActivity : AppCompatActivity() {
 
         buildStepList()
 
-        currentStepIndex = savedInstanceState?.getInt("currentStepIndex", 0) ?: 0
+        currentStepIndex = restoreStepIndex(savedInstanceState)
 
         if (steps.isEmpty()) {
             activateAndFinish()
@@ -86,6 +94,17 @@ class PermissionFlowActivity : AppCompatActivity() {
         if (step.type == StepType.NOTIFICATION) return
 
         when (step.type) {
+            StepType.ALARM -> {
+                hasLeftForPermission = false
+                if (canScheduleExactAlarms()) {
+                    showSuccessThenAdvance()
+                } else {
+                    // Not granted. Let them retry or move on. The battery step
+                    // that follows also grants exact alarms through Android's
+                    // power allowlist exemption, so skipping is not fatal.
+                    binding.btnSkip.visibility = View.VISIBLE
+                }
+            }
             StepType.BATTERY -> {
                 showCheckingScreen()
                 startBatteryPoll()
@@ -111,7 +130,16 @@ class PermissionFlowActivity : AppCompatActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putInt("currentStepIndex", currentStepIndex)
+        // Save which step, not its position. The list is rebuilt from current
+        // permission state on recreation, so steps granted while the user was
+        // away drop out and positions shift. A saved position would then point
+        // at the wrong step and silently skip one.
+        val stepName = if (currentStepIndex < steps.size) {
+            steps[currentStepIndex].type.name
+        } else {
+            STEP_DONE
+        }
+        outState.putString(KEY_CURRENT_STEP, stepName)
     }
 
     // -----------------------------------------------------------------------
@@ -199,6 +227,27 @@ class PermissionFlowActivity : AppCompatActivity() {
             )
         }
 
+        // Must come before the battery step. canScheduleExactAlarms() also
+        // returns true for battery-exempt apps, so once the battery step has
+        // run this check can no longer tell whether the real permission was
+        // granted, and the step would skip itself. Asking first means DozeOff
+        // ends up with two independent grants, not one.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !canScheduleExactAlarms()) {
+            steps.add(
+                Step(
+                    type = StepType.ALARM,
+                    title = "Alarms & Reminders",
+                    description = "DozeOff works by scheduling silent alarms that keep " +
+                            "your notifications arriving on time. Android needs your " +
+                            "permission for that.\n\n" +
+                            "Tap the button below, turn on Alarms & reminders for " +
+                            "DozeOff, then come back.",
+                    buttonText = "Allow Alarms",
+                    iconRes = R.drawable.ic_alarm
+                )
+            )
+        }
+
         if (!HealthChecker.isBatteryOptimizationExempt(this) &&
             !prefsManager.isBatteryStepCompleted
         ) {
@@ -246,6 +295,7 @@ class PermissionFlowActivity : AppCompatActivity() {
         val step = steps[currentStepIndex]
         val alreadyCompleted = when (step.type) {
             StepType.NOTIFICATION -> HealthChecker.isNotificationPermissionGranted(this)
+            StepType.ALARM -> canScheduleExactAlarms()
             StepType.BATTERY -> HealthChecker.isBatteryOptimizationExempt(this) || prefsManager.isBatteryStepCompleted
             StepType.OEM -> prefsManager.isOemConfigured
         }
@@ -279,6 +329,27 @@ class PermissionFlowActivity : AppCompatActivity() {
         when (steps[currentStepIndex].type) {
             StepType.NOTIFICATION -> {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+
+            StepType.ALARM -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    hasLeftForPermission = true
+                    try {
+                        startActivity(
+                            Intent(
+                                Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                Uri.parse("package:$packageName")
+                            )
+                        )
+                    } catch (e: Exception) {
+                        // No settings screen for it on this device. Move on;
+                        // the battery step still grants exact alarms.
+                        hasLeftForPermission = false
+                        goToNextStep()
+                    }
+                } else {
+                    goToNextStep()
+                }
             }
 
             StepType.BATTERY -> {
@@ -340,6 +411,29 @@ class PermissionFlowActivity : AppCompatActivity() {
     private fun goToNextStep() {
         currentStepIndex++
         displayStep()
+    }
+
+    /**
+     * Find where to resume after the activity is recreated, typically because
+     * Android killed the app while the user was in a Settings screen. Returns
+     * the saved step if it is still pending, otherwise the next pending step
+     * after it. Steps are only ever resumed forwards.
+     */
+    private fun restoreStepIndex(state: Bundle?): Int {
+        val saved = state?.getString(KEY_CURRENT_STEP) ?: return 0
+        if (saved == STEP_DONE) return steps.size
+        val savedType = StepType.values().firstOrNull { it.name == saved } ?: return 0
+        val index = steps.indexOfFirst { it.type.ordinal >= savedType.ordinal }
+        return if (index == -1) steps.size else index
+    }
+
+    private fun canScheduleExactAlarms(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (getSystemService(ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
+        } else {
+            // Pre-Android 12, exact alarms need no permission
+            true
+        }
     }
 
     private fun activateAndFinish() {
